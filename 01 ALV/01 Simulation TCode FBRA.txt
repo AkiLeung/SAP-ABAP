@@ -1,0 +1,144 @@
+REPORT ZRPTEST001.
+
+*线型池引用
+TYPE-POOLS SLIS.
+
+***********************************************************
+*TABLES :声明报表中使用到的数据表
+***********************************************************
+TABLES:BKPF.
+
+*@---------------------------------------------------------------------*
+*@   BAPI函数用到的变量
+*@---------------------------------------------------------------------*
+DATA: WA_BAPIDOCHDRR TYPE BAPIACREV,
+      GT_RETURN      TYPE TABLE OF BAPIRET2 WITH HEADER LINE,
+      IT_RETURN      LIKE BAPIRET2 OCCURS 0 WITH HEADER LINE.
+
+DATA:IT_BKPF LIKE BKPF OCCURS 0 WITH HEADER LINE.
+
+"BDC相关内表
+DATA:GT_BDCDATA    LIKE BDCDATA OCCURS 0 WITH HEADER LINE,
+      GT_BDCMSGCOLL LIKE BDCMSGCOLL OCCURS 0 WITH HEADER LINE,
+      GT_MSG        LIKE BAPIRET2 OCCURS 0 WITH HEADER LINE.
+
+***********************************************************
+* FIELD SYMBOLS/定义指针
+***********************************************************
+FIELD-SYMBOLS: <IT_BKPF> LIKE IT_BKPF.
+
+
+***********************************************************
+*SELECTION-SCREEN :定义选择屏幕中的选择字段
+***********************************************************
+SELECTION-SCREEN BEGIN OF BLOCK TXT01 WITH FRAME TITLE TEXT-001.
+PARAMETERS: P_BELNR LIKE BKPF-BELNR OBLIGATORY DEFAULT '101018634' .
+SELECTION-SCREEN END OF BLOCK TXT01.
+
+***********************************************************
+*START-OF-SELECTION:程序运行所处理的代码
+***********************************************************
+START-OF-SELECTION.
+  PERFORM FRM_REV_POST.
+  """"[CODE]
+
+*&---------------------------------------------------------------------*
+*&Form  FRM_REV_POST
+*&---------------------------------------------------------------------*
+FORM FRM_REV_POST.
+
+  IF P_BELNR IS NOT INITIAL.
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+      EXPORTING
+        INPUT  = P_BELNR
+      IMPORTING
+        OUTPUT = P_BELNR.
+
+    SELECT * INTO CORRESPONDING FIELDS OF TABLE IT_BKPF FROM BKPF WHERE BELNR = P_BELNR AND BUKRS = '1000'.
+  ENDIF.
+
+  READ TABLE IT_BKPF INDEX 1.
+  IF SY-SUBRC = 0.
+    PERFORM BDC_DYNPRO_FI    USING 'SAPMF05A' '0105'.
+    PERFORM BDC_FIELD_FI     USING 'BDC_CURSOR' 'UF05A-STGRD'.
+    PERFORM BDC_FIELD_FI     USING 'BDC_OKCODE' '=BU'.
+    PERFORM BDC_FIELD_FI     USING 'RF05A-BELNS' IT_BKPF-BELNR.
+    PERFORM BDC_FIELD_FI     USING 'BKPF-BUKRS'  IT_BKPF-BUKRS.
+    PERFORM BDC_FIELD_FI     USING 'RF05A-GJAHS' IT_BKPF-GJAHR.
+    PERFORM BDC_FIELD_FI     USING 'UF05A-STGRD' '03'.
+
+    REFRESH GT_BDCMSGCOLL.
+    CALL TRANSACTION 'FB08' USING GT_BDCDATA MODE  'N' UPDATE 'S'  MESSAGES INTO GT_BDCMSGCOLL.
+
+    READ TABLE  GT_BDCMSGCOLL WITH KEY MSGTYP = 'S'.
+    IF SY-SUBRC = 0.
+      MESSAGE 'Successfully!' TYPE 'S'.
+    ELSE.
+      MESSAGE 'Failure!' TYPE 'E'.
+    ENDIF.
+  ENDIF.
+
+*  LOOP AT IT_BKPF ASSIGNING <IT_BKPF> WHERE XREVERSAL = ''.
+**   给 BAPI 函数相应的参数赋值
+*    WA_BAPIDOCHDRR-OBJ_TYPE     = <IT_BKPF>-AWTYP.
+*    WA_BAPIDOCHDRR-OBJ_KEY      = <IT_BKPF>-AWKEY.
+*    WA_BAPIDOCHDRR-OBJ_KEY_R    = <IT_BKPF>-AWKEY.
+*    WA_BAPIDOCHDRR-PSTNG_DATE   = <IT_BKPF>-BUDAT.
+*    WA_BAPIDOCHDRR-FIS_PERIOD   = <IT_BKPF>-MONAT.
+*    WA_BAPIDOCHDRR-COMP_CODE    = <IT_BKPF>-BUKRS.
+*    WA_BAPIDOCHDRR-AC_DOC_NO    = <IT_BKPF>-BELNR.
+*    WA_BAPIDOCHDRR-REASON_REV   = '03'.
+**   取得系统 LOGICAL SYSTEM
+*    CALL FUNCTION 'OWN_LOGICAL_SYSTEM_GET'
+*      IMPORTING
+*        OWN_LOGICAL_SYSTEM = WA_BAPIDOCHDRR-OBJ_SYS.
+**   调用 BAPI 函数，冲销会计凭证
+*    CALL FUNCTION 'BAPI_ACC_DOCUMENT_REV_POST'
+*      EXPORTING
+*        REVERSAL = WA_BAPIDOCHDRR
+*        BUS_ACT  = <IT_BKPF>-GLVOR
+*      TABLES
+*        RETURN   = GT_RETURN.
+*
+*    BREAK-POINT .
+*
+*    READ TABLE GT_RETURN WITH KEY TYPE = 'E'.
+*    IF SY-SUBRC NE 0.
+**     提交凭证过账
+*      CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+*        EXPORTING
+*          WAIT   = 'X'
+*        IMPORTING
+*          RETURN = IT_RETURN.
+*      IF IT_RETURN IS INITIAL.
+*        MESSAGE '会计凭证过账成功' TYPE 'S'.
+*      ELSE.
+*        MESSAGE '会计凭证过账失败' TYPE 'E'.
+*      ENDIF.
+*    ELSE.
+*      MESSAGE '会计凭证过账失败' TYPE 'E'.
+*      CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+*    ENDIF.
+*  ENDLOOP.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      FORM  BDC_DYNPRO
+*&---------------------------------------------------------------------*
+FORM BDC_DYNPRO_FI  USING PROG SCR.
+  CLEAR GT_BDCDATA.
+  GT_BDCDATA-PROGRAM = PROG.
+  GT_BDCDATA-DYNPRO  = SCR.
+  GT_BDCDATA-DYNBEGIN = 'X'.
+  APPEND GT_BDCDATA.
+ENDFORM.                    " BDC_DYNPRO
+
+*&---------------------------------------------------------------------*
+*&      FORM  BDC_FIELD
+*&---------------------------------------------------------------------*
+FORM BDC_FIELD_FI  USING    FNAM FVAL.
+  CLEAR GT_BDCDATA.
+  GT_BDCDATA-FNAM = FNAM.
+  GT_BDCDATA-FVAL  = FVAL.
+  APPEND GT_BDCDATA.
+ENDFORM.
