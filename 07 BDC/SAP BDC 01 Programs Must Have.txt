@@ -1,0 +1,51 @@
+"BDC相关内表
+DATA:GT_BDCDATA    LIKE BDCDATA OCCURS 0 WITH HEADER LINE,
+     GT_BDCMSGCOLL LIKE BDCMSGCOLL OCCURS 0 WITH HEADER LINE,
+     GT_MSG        LIKE BAPIRET2 OCCURS 0 WITH HEADER LINE.
+	 
+	 
+	 
+  CLEAR:GT_BDCDATA,GT_BDCMSGCOLL,GT_MSG.
+  REFRESH:GT_BDCDATA,GT_BDCMSGCOLL,GT_MSG.
+  
+  "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  " statement code
+  "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  
+  REFRESH GT_BDCMSGCOLL.
+  CALL TRANSACTION 'FB08' USING GT_BDCDATA
+          MODE  'N'
+          UPDATE 'S'
+          MESSAGES INTO GT_BDCMSGCOLL.
+
+    O_TYPE = ''.
+    O_MESG = ''.
+    READ TABLE  GT_BDCMSGCOLL WITH KEY MSGTYP = 'S'.
+    IF SY-SUBRC = 0.
+      O_TYPE = 'S'.
+      O_MESG = 'Successfully!'.
+    ELSE.
+      O_TYPE = 'F'.
+      O_MESG = 'Failure!'.
+    ENDIF.
+	
+*&---------------------------------------------------------------------*
+*&      FORM  BDC_DYNPRO
+*&---------------------------------------------------------------------*
+FORM BDC_DYNPRO  USING PROG SCR.
+  CLEAR GT_BDCDATA.
+  GT_BDCDATA-PROGRAM = PROG.
+  GT_BDCDATA-DYNPRO  = SCR.
+  GT_BDCDATA-DYNBEGIN = 'X'.
+  APPEND GT_BDCDATA.
+ENDFORM.                    " BDC_DYNPRO
+
+*&---------------------------------------------------------------------*
+*&      FORM  BDC_FIELD
+*&---------------------------------------------------------------------*
+FORM BDC_FIELD  USING    FNAM FVAL.
+  CLEAR GT_BDCDATA.
+  GT_BDCDATA-FNAM = FNAM.
+  GT_BDCDATA-FVAL  = FVAL.
+  APPEND GT_BDCDATA.
+ENDFORM.
