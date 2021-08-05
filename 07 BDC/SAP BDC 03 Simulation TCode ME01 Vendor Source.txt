@@ -1,0 +1,67 @@
+
+*---------------------------------------------------------------------*
+*       FORM INSERT_PUR_SOURCELIST                                    *
+*---------------------------------------------------------------------*
+FORM insert_pur_sourcelist TABLES src_list STRUCTURE zmm_prsrc
+                                  messages STRUCTURE bdcmsgcoll
+                           USING  matnr TYPE matnr_d
+                                  werks TYPE werks_d.
+  DATA : l_mode TYPE c VALUE 'N'.
+  callno = 1.
+  PERFORM za_build_bdc_newscreen USING 'SAPLMEOR'	   '0200'.
+  PERFORM zb_build_bdc_data  USING     'BDC_OKCODE'	 '/00'.
+  PERFORM zb_build_bdc_data  USING     'EORD-MATNR'	 matnr.
+  PERFORM zb_build_bdc_data  USING     'EORD-WERKS'	 werks.
+
+  LOOP AT src_list.
+    PERFORM za_build_bdc_newscreen USING 'SAPLMEOR'       '0205'.
+    PERFORM zb_build_bdc_data  USING     'BDC_OKCODE'     '=SA'.
+
+    PERFORM za_build_bdc_newscreen USING 'SAPLMEOR'       '0205'.
+    PERFORM zb_build_bdc_data  USING     'BDC_OKCODE'     '=NS'.
+
+    PERFORM za_build_bdc_newscreen USING 'SAPLMEOR'       '0205'.
+    PERFORM zb_build_bdc_data  USING     'BDC_CURSOR'     'EORD-LIFNR(02)'.
+    PERFORM zb_build_bdc_data  USING     'BDC_OKCODE'     '/00'.
+    PERFORM zb_build_bdc_data  USING     'EORD-VDATU(02)' src_list-vdatu.
+    PERFORM zb_build_bdc_data  USING     'EORD-BDATU(02)' src_list-bdatu.
+    PERFORM zb_build_bdc_data  USING     'EORD-LIFNR(02)' src_list-lifnr.
+    PERFORM zb_build_bdc_data  USING     'EORD-EKORG(02)' src_list-ekorg.
+  ENDLOOP.
+  PERFORM za_build_bdc_newscreen USING 'SAPLMEOR'       '0205'.
+  PERFORM zb_build_bdc_data  USING     'BDC_OKCODE'     '/00'.
+
+  PERFORM za_build_bdc_newscreen USING 'SAPLMEOR'       '0205'.
+  PERFORM zb_build_bdc_data  USING     'BDC_OKCODE'     '=BU'.
+
+  CALL TRANSACTION 'ME01' USING bdcdata MODE l_mode UPDATE 'L' MESSAGES INTO it_bdcmsgs .
+  COMMIT WORK AND WAIT.
+  SET UPDATE TASK LOCAL.
+  messages[] = it_bdcmsgs[].
+
+ENDFORM.
+
+
+*---------------------------------------------------------------------*
+*       FORM ZA_BUILD_BDC_NEWSCREEN                                   *
+*---------------------------------------------------------------------*
+FORM za_build_bdc_newscreen USING scrnam scrno.
+  bdcdata-program  = scrnam.
+  bdcdata-dynpro   = scrno.
+  bdcdata-dynbegin = 'X'.
+  APPEND bdcdata.  CLEAR bdcdata.
+ENDFORM.
+*---------------------------------------------------------------------*
+*       FORM ZB_BUILD_BDC_DATA                                        *
+*---------------------------------------------------------------------*
+FORM zb_build_bdc_data USING fnam fval.
+  bdcdata-fnam     = fnam.
+  bdcdata-fval     = fval.
+  APPEND bdcdata.  CLEAR bdcdata.
+ENDFORM.
+
+
+
+
+
+
